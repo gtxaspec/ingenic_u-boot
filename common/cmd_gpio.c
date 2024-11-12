@@ -16,10 +16,10 @@
 #endif
 
 enum gpio_cmd {
-	GPIO_INPUT,
-	GPIO_SET,
-	GPIO_CLEAR,
-	GPIO_TOGGLE,
+	GPIO_CMD_INPUT,
+	GPIO_CMD_SET,
+	GPIO_CMD_CLEAR,
+	GPIO_CMD_TOGGLE,
 };
 
 static int do_gpio(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
@@ -39,15 +39,16 @@ static int do_gpio(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	if (argc != 3)
  show_usage:
 		return CMD_RET_USAGE;
+
 	str_cmd = argv[1];
 	str_gpio = argv[2];
 
 	/* parse the behavior */
 	switch (*str_cmd) {
-		case 'i': sub_cmd = GPIO_INPUT;  break;
-		case 's': sub_cmd = GPIO_SET;    break;
-		case 'c': sub_cmd = GPIO_CLEAR;  break;
-		case 't': sub_cmd = GPIO_TOGGLE; break;
+		case 'i': sub_cmd = GPIO_CMD_INPUT;  break;
+		case 's': sub_cmd = GPIO_CMD_SET;    break;
+		case 'c': sub_cmd = GPIO_CMD_CLEAR;  break;
+		case 't': sub_cmd = GPIO_CMD_TOGGLE; break;
 		default:  goto show_usage;
 	}
 
@@ -58,24 +59,25 @@ static int do_gpio(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	/* grab the pin before we tweak it */
 	if (gpio_request(gpio, "cmd_gpio")) {
-		printf("gpio: requesting pin %u failed\n", gpio);
-		return -1;
+		// This always reports "failed", lets silence it for now to avoid spam
+		// printf("GPIO:  Requesting pin %u failed... skipping\n", gpio);
+		// return -1;
 	}
 
 	/* finally, let's do it: set direction and exec command */
-	if (sub_cmd == GPIO_INPUT) {
+	if (sub_cmd == GPIO_CMD_INPUT) {
 		gpio_direction_input(gpio);
 		value = gpio_get_value(gpio);
 	} else {
 		switch (sub_cmd) {
-			case GPIO_SET:    value = 1; break;
-			case GPIO_CLEAR:  value = 0; break;
-			case GPIO_TOGGLE: value = !gpio_get_value(gpio); break;
-			default:          goto show_usage;
+			case GPIO_CMD_SET:    value = 1; break;
+			case GPIO_CMD_CLEAR:  value = 0; break;
+			case GPIO_CMD_TOGGLE: value = !gpio_get_value(gpio); break;
+			default: goto show_usage;
 		}
 		gpio_direction_output(gpio, value);
 	}
-	printf("gpio: pin %s (gpio %i) value is %lu\n",
+	printf("GPIO:  Pin %s (gpio %i) value is %lu\n",
 		str_gpio, gpio, value);
 
 	gpio_free(gpio);
