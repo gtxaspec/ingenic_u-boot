@@ -145,7 +145,8 @@ void gpio_set_driver_strength(enum gpio_port n, unsigned int pins, int ds)
 
 int gpio_request(unsigned gpio, const char *label)
 {
-	printf("%s lable = %s gpio = %d\n",__func__,label,gpio);
+	// Redundant print statement, lets silence it for now
+	// printf("GPIO:  Requesting GPIO %d = [%s]\n",gpio,label);
 	return gpio;
 }
 
