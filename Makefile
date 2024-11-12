@@ -436,10 +436,19 @@ endif
 ifeq ($(CONFIG_MBR_CREATOR),y)
 ALL-y += $(obj)u-boot-with-spl-mbr.bin
 else ifeq ($(CONFIG_GPT_CREATOR),y)
+ifeq ($(CONFIG_SPL_LZOP),y)
+ALL-y += $(obj)u-boot-lzo-with-spl-mbr-gpt.bin
+ALL-y += $(obj)u-boot-lzo-with-spl.bin
+else
 ALL-y += $(obj)u-boot-with-spl-mbr-gpt.bin
 ALL-y += $(obj)u-boot-with-spl.bin
+endif
+else
+ifeq ($(CONFIG_SPL_LZOP),y)
+ALL-y += $(obj)u-boot-lzo-with-spl.bin
 else
 ALL-y += $(obj)u-boot-with-spl.bin
+endif
 endif
 
 
@@ -481,6 +490,11 @@ ifndef CONFIG_SYS_UBOOT_START
 CONFIG_SYS_UBOOT_START := 0
 endif
 
+$(obj)u-boot-lzo.img:		$(obj)u-boot.bin
+		lzop -9 -f -o u-boot-lzo.bin $(obj)u-boot.bin
+		mkimage -A mips -O u-boot -T firmware -C lzo -a $(CONFIG_SYS_TEXT_BASE) -e $(CONFIG_SYS_UBOOT_START) \
+			-n "u-boot-lzo.img" -d u-boot-lzo.bin  $@
+
 $(obj)u-boot.img:	$(obj)u-boot.bin
 		$(obj)tools/mkimage -A $(ARCH) -T firmware -C none \
 		-O u-boot -a $(CONFIG_SYS_TEXT_BASE) \
@@ -521,6 +535,12 @@ $(obj)u-boot-with-spl.bin: $(obj)spl/u-boot-spl.bin $(obj)u-boot.bin
 		cat $(obj)spl/u-boot-spl-pad.bin $(obj)u-boot.bin > $@
 		rm $(obj)spl/u-boot-spl-pad.bin
 endif
+
+$(obj)u-boot-lzo-with-spl.bin: $(obj)spl/u-boot-spl.bin $(obj)u-boot-lzo.img
+		$(OBJCOPY) ${OBJCFLAGS} --pad-to=$(CONFIG_SPL_PAD_TO) \
+			-I binary -O binary $< $(obj)spl/u-boot-spl-pad.bin
+		cat $(obj)spl/u-boot-spl-pad.bin $(obj)u-boot-lzo.img > $@
+		rm $(obj)spl/u-boot-spl-pad.bin
 
 $(obj)u-boot-with-spl.imx: $(obj)spl/u-boot-spl.bin $(obj)u-boot.bin
 		$(MAKE) -C $(SRCTREE)/arch/arm/imx-common \
@@ -600,6 +620,9 @@ ifeq ($(CONFIG_SPL_PARAMS_FIXER),y)
 $(obj)u-boot-with-spl-mbr-gpt.bin: $(obj)u-boot-with-spl.bin $(obj)spl/u-boot-spl.bin
 		cat $(obj)tools/ingenic-tools/mbr-gpt.bin $(obj)u-boot-with-spl.bin > $@
 		$(obj)tools/ingenic-tools/spl_params_fixer $@ $(obj)spl/u-boot-spl.bin 0 256 > /dev/null
+$(obj)u-boot-lzo-with-spl-mbr-gpt.bin: $(obj)u-boot-lzo-with-spl.bin
+		cat $(obj)tools/ingenic-tools/mbr-gpt.bin $(obj)u-boot-lzo-with-spl.bin > $@
+		$(obj)tools/ingenic-tools/spl_params_fixer $@ $(obj)spl/u-boot-spl.bin 0 256 > /dev/null
 else
 $(obj)u-boot-with-spl-mbr-gpt.bin: $(obj)u-boot-with-spl.bin
 ifneq ($(CONFIG_GPT_AT_TAIL),y)
@@ -608,6 +631,14 @@ else
 		@chmod +x $(obj)tools/ingenic-tools/mk-gpt-xboot.sh
 		$(obj)tools/ingenic-tools/mk-gpt-xboot.sh $(obj)tools/ingenic-tools/mbr-of-gpt.bin \
 		$(obj)u-boot-with-spl.bin $(obj)tools/ingenic-tools/gpt.bin $(CONFIG_GPT_TABLE_PATH)/partitions.tab $@
+endif
+$(obj)u-boot-lzo-with-spl-mbr-gpt.bin: $(obj)u-boot-lzo-with-spl.bin
+ifneq ($(CONFIG_GPT_AT_TAIL),y)
+		cat $(obj)tools/ingenic-tools/mbr-gpt.bin $(obj)u-boot-lzo-with-spl.bin > $@
+else
+		@chmod +x $(obj)tools/ingenic-tools/mk-gpt-xboot.sh
+		$(obj)tools/ingenic-tools/mk-gpt-xboot.sh $(obj)tools/ingenic-tools/mbr-of-gpt.bin \
+		$(obj)u-boot-lzo-with-spl.bin $(obj)tools/ingenic-tools/gpt.bin $(CONFIG_GPT_TABLE_PATH)/partitions.tab $@
 endif
 endif
 
@@ -802,7 +833,7 @@ $(VERSION_FILE):
 		@( localvers='$(shell $(TOPDIR)/tools/setlocalversion $(TOPDIR))' ; \
 		   printf '#define PLAIN_VERSION "%s%s"\n' \
 			"$(U_BOOT_VERSION)" "$${localvers}" ; \
-		   printf '#define U_BOOT_VERSION "U-Boot %s%s"\n' \
+		   printf '#define U_BOOT_VERSION "Ingenic U-Boot Flex %s%s"\n' \
 			"$(U_BOOT_VERSION)" "$${localvers}" ; \
 		) > $@.tmp
 		@( printf '#define CC_VERSION_STRING "%s"\n' \
@@ -907,11 +938,15 @@ tidy:	clean
 
 clobber:	tidy
 	@find $(OBJTREE) -type f \( -name '*.srec' \
-		-o -name '*.bin' -o -name u-boot.img \) \
+		 -o -name u-boot.img \) \
 		-print0 | xargs -0 rm -f
 	@rm -f $(OBJS) $(obj)*.bak $(obj)ctags $(obj)etags $(obj)TAGS \
 		$(obj)cscope.* $(obj)*.*~
 	@rm -f $(obj)u-boot $(obj)u-boot.map $(obj)u-boot.hex $(ALL-y)
+	@rm -f $(obj)spl/u-boot-spl.bin
+	@rm -f $(obj)u-boot-with-spl.bin
+	@rm -f $(obj)u-boot.bin
+	@rm -f $(obj)examples/standalone/hello_world.bin
 	@rm -f $(obj)u-boot.kwb
 	@rm -f $(obj)u-boot.pbl
 	@rm -f $(obj)u-boot.imx
@@ -937,6 +972,9 @@ clobber:	tidy
 	@[ ! -d $(obj)nand_spl ] || find $(obj)nand_spl -name "*" -type l -print | xargs rm -f
 	@rm -f $(obj)dts/*.tmp
 	@rm -f $(obj)spl/u-boot-spl{,-pad}.ais
+	@rm -f $(obj)u-boot-lzo.img
+	@rm -f $(obj)u-boot-lzo.bin
+	@rm -f $(obj)u-boot-lzo-with-spl.bin
 
 mrproper \
 distclean:	clobber unconfig
