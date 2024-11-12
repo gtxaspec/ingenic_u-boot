@@ -283,6 +283,16 @@ void gpio_disable_pull_down(unsigned gpio)
 
 	writel(1 << pin, GPIO_PXPDENC(port));
 }
+void gpio_set_pull_dir(unsigned gpio, int pull)
+{
+	unsigned port= gpio / 32;
+	unsigned pin = gpio % 32;
+	if (pull) {
+		writel(1 << pin, GPIO_PXPDIRS(port));
+	} else {
+		writel(1 << pin, GPIO_PXPDIRC(port));
+	}
+}
 
 void gpio_as_irq_high_level(unsigned gpio)
 {
@@ -378,5 +388,98 @@ void dump_gpio_func( unsigned int gpio)
 	d = d | ((readl(base + PXMSK) >> pin) & 1) << 2;
 	d = d | ((readl(base + PXPAT1) >> pin) & 1) << 1;
 	d = d | ((readl(base + PXPAT0) >> pin) & 1) << 0;
-    printf("gpio[%d] fun %x\n",gpio,d);
+	printf("gpio[%d] fun %x\n",gpio,d);
+}
+
+#define MAX_GPIO_SET_LEN	256  // Define a maximum length for the GPIO settings string
+
+void process_gpio_token(char* token) {
+	char *endptr;
+	unsigned gpio = simple_strtoul(token, &endptr, 10);
+
+	// Check if the mode character is present and valid
+	char mode = (*endptr) ? *endptr : 'i'; // Default to 'i' (input) if no mode specified
+
+#if defined(CONFIG_T31)
+	bool disablePullUp = false;
+	bool disablePullDown = false;
+
+	// Check for additional characters for pull-up/pull-down configuration
+	char* ptr = endptr + 1;
+	while (*ptr) {
+		switch (*ptr) {
+			case 'u':
+			case 'U':
+				disablePullUp = true;
+				break;
+			case 'd':
+		    case 'D':
+				disablePullDown = true;
+				break;
+		}
+		ptr++;
+	}
+#endif
+
+	gpio_request(gpio, "gpio_set");
+	printf(" ");
+	switch (mode) {
+		case 'i': // Input
+		case 'I': // Also treat uppercase 'I' as Input for consistency
+			gpio_direction_input(gpio);
+			printf("%ui", gpio);
+#if defined(CONFIG_T31)
+			if (disablePullUp) {
+				gpio_disable_pull_up(gpio);
+				printf("u");
+			}
+			if (disablePullDown) {
+				gpio_disable_pull_down(gpio);
+				printf("d");
+			}
+			#endif
+			break;
+		case 'o': // Output low
+			gpio_direction_output(gpio, 0);
+			printf("%uo", gpio);
+			break;
+		case 'O': // Output high
+			gpio_direction_output(gpio, 1);
+			printf("%uO", gpio);
+			break;
+		default:
+			printf("%u?%c", gpio, mode);
+			break;
+	}
+}
+
+void handle_gpio_settings(const char *env_var_name) {
+	if (!env_var_name) {
+		printf("GPIO:  Error: gpio_settings called without variable name\n");
+		return;
+	}
+
+	const char *env_gpio_str = getenv(env_var_name);
+	if (!env_gpio_str || *env_gpio_str == '\0') {
+		printf("GPIO:  %s: No GPIO env settings provided\n", env_var_name);
+		return;
+	}
+
+	char gpio_str_copy[MAX_GPIO_SET_LEN];
+	strncpy(gpio_str_copy, env_gpio_str, MAX_GPIO_SET_LEN - 1);
+	gpio_str_copy[MAX_GPIO_SET_LEN - 1] = '\0';
+
+	char *token = strtok(gpio_str_copy, " ");
+
+	printf("GPIO:  %s:", env_var_name);
+	while (token) {
+		if (strncmp(token, "gpio", 4) == 0) {
+			token = strtok(NULL, " ");
+			continue;
+		}
+		process_gpio_token(token);
+		udelay(1000); // Add a delay after setting each GPIO
+		token = strtok(NULL, " ");
+	}
+	printf("\n");
 }
