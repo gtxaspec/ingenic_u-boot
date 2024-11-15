@@ -121,14 +121,6 @@ int spl_start_uboot(void)
 	return 1;
 }
 #endif
-/* U-Boot common routines */
-int checkboard(void)
-{
-#ifndef CONFIG_FAST_BOOT
-	puts("Board: ISVP (Ingenic XBurst2 T41 SoC)\n");
-#endif
-	return 0;
-}
 
 #ifdef CONFIG_SPL_BUILD
 
