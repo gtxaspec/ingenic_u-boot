@@ -90,14 +90,14 @@ int board_mmc_init(bd_t *bd)
 
 int board_eth_init(bd_t *bis)
 {
+		int ret = 0;
 #ifdef CONFIG_USB_ETHER_ASIX
-	if (0 == strncmp(getenv("ethact"), "asx", 3))
-	{
-		run_command("usb start", 0);
-	}
+		if (0 == strncmp(getenv("ethact"), "asx", 3)) {
+				run_command("usb start", 0);
+		}
 #endif
-
-	return jz_net_initialize(bis);
+		ret += jz_net_initialize(bis);
+		return ret;
 }
 
 #ifdef CONFIG_SPL_NAND_SUPPORT
