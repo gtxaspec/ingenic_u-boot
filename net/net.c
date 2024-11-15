@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *	Copied from Linux Monitor (LiMon) - Networking.
  *
@@ -529,7 +530,7 @@ restart:
 		case NETLOOP_SUCCESS:
 			net_cleanup_loop();
 			if (NetBootFileXferSize > 0) {
-				printf("Bytes transferred = %ld (%lx hex)\n",
+				printf("Net:   Bytes transferred = %ld (%lx hex)\n",
 					NetBootFileXferSize,
 					NetBootFileXferSize);
 				setenv_hex("filesize", NetBootFileXferSize);
