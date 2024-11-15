@@ -47,7 +47,7 @@ int sfc_is_init = 0;
 unsigned int sfc_rate = 0;
 unsigned int sfc_quad_mode = 0;
 unsigned int quad_mode_is_set = 0;
-unsigned char sfc_index;
+//unsigned char sfc_index;
 
 
 struct jz_sfc_slave {
