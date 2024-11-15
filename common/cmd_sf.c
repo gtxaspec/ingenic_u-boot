@@ -2,32 +2,34 @@
  * Command for accessing SPI flash.
  *
  * Copyright (C) 2008 Atmel Corporation
- * Licensed under the GPL-2 or later.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <div64.h>
 #include <malloc.h>
 #include <spi_flash.h>
-#include <asm/arch/sfc.h>
 
 #include <asm/io.h>
 
 #ifndef CONFIG_SF_DEFAULT_SPEED
-# define CONFIG_SF_DEFAULT_SPEED	1000000
-#endif
-#ifndef CONFIG_SF_DEFAULT_MODE
-# define CONFIG_SF_DEFAULT_MODE		SPI_MODE_3
-#endif
-#ifndef CONFIG_SF_DEFAULT_CS
-# define CONFIG_SF_DEFAULT_CS		0
-#endif
-#ifndef CONFIG_SF_DEFAULT_BUS
-# define CONFIG_SF_DEFAULT_BUS		0
+#define CONFIG_SF_DEFAULT_SPEED		1000000
 #endif
 
-static struct spi_flash *flash0;
-static struct spi_flash *flash1;
+#ifndef CONFIG_SF_DEFAULT_MODE
+#define CONFIG_SF_DEFAULT_MODE		SPI_MODE_3
+#endif
+
+#ifndef CONFIG_SF_DEFAULT_CS
+#define CONFIG_SF_DEFAULT_CS		0
+#endif
+
+#ifndef CONFIG_SF_DEFAULT_BUS
+#define CONFIG_SF_DEFAULT_BUS		0
+#endif
+
+static struct spi_flash *flash;
 
 #define PRINT_TIME
 
@@ -47,18 +49,12 @@ static struct spi_flash *flash1;
  *    1: success
  *   -1: failure (bad format, bad address).
  */
-static int sf_parse_len_arg(unsigned char sfc_index,char *arg, ulong *len)
+static int sf_parse_len_arg(char *arg, ulong *len)
 {
 	char *ep;
 	char round_up_len; /* indicates if the "+length" form used */
-	size_t sector_size;
 	ulong len_arg;
 
-	if(sfc_index == SFC_0) {
-		sector_size = flash0->sector_size;
-	} else if(sfc_index == SFC_1) {
-		sector_size = flash1->sector_size;
-	}
 	round_up_len = 0;
 	if (*arg == '+') {
 		round_up_len = 1;
@@ -69,8 +65,8 @@ static int sf_parse_len_arg(unsigned char sfc_index,char *arg, ulong *len)
 	if (ep == arg || *ep != '\0')
 		return -1;
 
-	if (round_up_len && sector_size > 0)
-		*len = ROUND(len_arg, sector_size);
+	if (round_up_len && flash->sector_size > 0)
+		*len = ROUND(len_arg, flash->sector_size);
 	else
 		*len = len_arg;
 
@@ -94,7 +90,7 @@ static ulong bytes_per_second(unsigned int len, ulong start_ms)
 		return 1024 * len / max(get_timer(start_ms), 1);
 }
 
-static int do_spi_flash_probe(int argc, char * const argv[],unsigned char sfc_index)
+int do_spi_flash_probe(int argc, char * const argv[])
 {
 	unsigned int bus = CONFIG_SF_DEFAULT_BUS;
 	unsigned int cs = CONFIG_SF_DEFAULT_CS;
@@ -129,25 +125,22 @@ static int do_spi_flash_probe(int argc, char * const argv[],unsigned char sfc_in
 			return -1;
 	}
 
-	new = spi_flash_probe(sfc_index,bus, cs, speed, mode);
-
+	new = spi_flash_probe(bus, cs, speed, mode);
 	if (!new) {
 		printf("Failed to initialize SPI flash at %u:%u\n", bus, cs);
 		return 1;
 	}
 
-	if (flash0 && sfc_index == SFC_0)
-		spi_flash_free(flash0);
-	if (flash1 && sfc_index == SFC_1)
-		spi_flash_free(flash1);
-
-	if (sfc_index == SFC_0)
-		flash0 = new;
-	else if (sfc_index == SFC_1)
-		flash1 = new;
-	else;
+	if (flash)
+		spi_flash_free(flash);
+	flash = new;
 
 	return 0;
+}
+
+/* Get the current SPI flash device instance, provide external access */
+struct spi_flash *get_flash(void) {
+    return flash;
 }
 
 /**
@@ -164,12 +157,12 @@ static int do_spi_flash_probe(int argc, char * const argv[],unsigned char sfc_in
  * @param skipped	Count of skipped data (incremented by this function)
  * @return NULL if OK, else a string containing the stage which failed
  */
-static const char *spi_flash_update_block(unsigned char sfc_index,struct spi_flash *flash, u32 offset,
+static const char *spi_flash_update_block(struct spi_flash *flash, u32 offset,
 		size_t len, const char *buf, char *cmp_buf, size_t *skipped)
 {
 	debug("offset=%#x, sector_size=%#x, len=%#zx\n",
 		offset, flash->sector_size, len);
-	if (spi_flash_read(sfc_index,flash, offset, len, cmp_buf))
+	if (spi_flash_read(flash, offset, len, cmp_buf))
 		return "read";
 	if (memcmp(cmp_buf, buf, len) == 0) {
 		debug("Skip region %x size %zx: no change\n",
@@ -177,9 +170,9 @@ static const char *spi_flash_update_block(unsigned char sfc_index,struct spi_fla
 		*skipped += len;
 		return NULL;
 	}
-	if (spi_flash_erase(sfc_index,flash, offset, len))
+	if (spi_flash_erase(flash, offset, len))
 		return "erase";
-	if (spi_flash_write(sfc_index,flash, offset, len, buf))
+	if (spi_flash_write(flash, offset, len, buf))
 		return "write";
 	return NULL;
 }
@@ -194,7 +187,7 @@ static const char *spi_flash_update_block(unsigned char sfc_index,struct spi_fla
  * @param buf		buffer to write from
  * @return 0 if ok, 1 on error
  */
-static int spi_flash_update(unsigned char sfc_index,struct spi_flash *flash, u32 offset,
+static int spi_flash_update(struct spi_flash *flash, u32 offset,
 		size_t len, const char *buf)
 {
 	const char *err_oper = NULL;
@@ -222,7 +215,7 @@ static int spi_flash_update(unsigned char sfc_index,struct spi_flash *flash, u32
 							 start_time));
 				last_update = get_timer(0);
 			}
-			err_oper = spi_flash_update_block(sfc_index,flash, offset, todo,
+			err_oper = spi_flash_update_block(flash, offset, todo,
 					buf, cmp_buf, &skipped);
 		}
 	} else {
@@ -244,7 +237,7 @@ static int spi_flash_update(unsigned char sfc_index,struct spi_flash *flash, u32
 	return 0;
 }
 
-static int do_spi_flash_read_write(int argc, char * const argv[],unsigned char sfc_index)
+static int do_spi_flash_read_write(int argc, char * const argv[])
 {
 	unsigned long addr;
 	unsigned long offset;
@@ -267,18 +260,10 @@ static int do_spi_flash_read_write(int argc, char * const argv[],unsigned char s
 		return -1;
 
 	/* Consistency checking */
-	if(sfc_index == SFC_0) {
-		if (offset + len > flash0->size) {
-			printf("ERROR: attempting %s past flash size (%#x)\n",
-				argv[0], flash0->size);
-			return 1;
-		}
-	} else if(sfc_index == SFC_1) {
-		if (offset + len > flash1->size) {
-			printf("ERROR: attempting %s past flash size (%#x)\n",
-				argv[0], flash1->size);
-			return 1;
-		}
+	if (offset + len > flash->size) {
+		printf("ERROR: attempting %s past flash size (%#x)\n",
+			argv[0], flash->size);
+		return 1;
 	}
 
 	buf = map_physmem(addr, len, MAP_WRBACK);
@@ -287,32 +272,19 @@ static int do_spi_flash_read_write(int argc, char * const argv[],unsigned char s
 		return 1;
 	}
 
-	if (strcmp(argv[0], "update") == 0) {
-		if(sfc_index == SFC_0) {
-			ret = spi_flash_update(sfc_index,flash0, offset, len, buf);
-		} else if(sfc_index == SFC_1) {
-			ret = spi_flash_update(sfc_index,flash1, offset, len, buf);
-		}
-	} else if (strncmp(argv[0], "read", 4) == 0 ||
+	if (strcmp(argv[0], "update") == 0)
+		ret = spi_flash_update(flash, offset, len, buf);
+	else if (strncmp(argv[0], "read", 4) == 0 ||
 			strncmp(argv[0], "write", 5) == 0) {
 		int read;
 
 		read = strncmp(argv[0], "read", 4) == 0;
-		if (read) {
-			if(sfc_index == SFC_0) {
-				ret = spi_flash_read(sfc_index,flash0, offset, len, buf);
-			} else if(sfc_index == SFC_1) {
-				ret = spi_flash_read(sfc_index,flash1, offset, len, buf);
-			}
-		} else {
-			if(sfc_index == SFC_0) {
-				ret = spi_flash_write(sfc_index,flash0, offset, len, buf);
-			} else if(sfc_index == SFC_1) {
-				ret = spi_flash_write(sfc_index,flash1, offset, len, buf);
-			}
-		}
+		if (read)
+			ret = spi_flash_read(flash, offset, len, buf);
+		else
+			ret = spi_flash_write(flash, offset, len, buf);
 
-		printf("SF: %zu bytes @ %#x %s: %s\n", (size_t)len, (u32)offset,
+		printf("SF:    %zu bytes @ %#x %s: %s\n", (size_t)len, (u32)offset,
 			read ? "Read" : "Written", ret ? "ERROR" : "OK");
 	}
 
@@ -321,7 +293,7 @@ static int do_spi_flash_read_write(int argc, char * const argv[],unsigned char s
 	return ret == 0 ? 0 : 1;
 }
 
-static int do_spi_flash_erase(int argc, char * const argv[],unsigned char sfc_index)
+static int do_spi_flash_erase(int argc, char * const argv[])
 {
 	unsigned long offset;
 	unsigned long len;
@@ -335,31 +307,19 @@ static int do_spi_flash_erase(int argc, char * const argv[],unsigned char sfc_in
 	if (*argv[1] == 0 || *endp != 0)
 		return -1;
 
-	ret = sf_parse_len_arg(sfc_index,argv[2], &len);
+	ret = sf_parse_len_arg(argv[2], &len);
 	if (ret != 1)
 		return -1;
 
 	/* Consistency checking */
-	if(sfc_index == SFC_0) {
-		if (offset + len > flash0->size) {
-			printf("ERROR: attempting %s past flash size (%#x)\n",
-				argv[0], flash0->size);
-			return 1;
-		}
-	} else if(sfc_index == SFC_1) {
-		if (offset + len > flash1->size) {
-			printf("ERROR: attempting %s past flash size (%#x)\n",
-				argv[0], flash1->size);
-			return 1;
-		}
+	if (offset + len > flash->size) {
+		printf("ERROR: attempting %s past flash size (%#x)\n",
+			argv[0], flash->size);
+		return 1;
 	}
 
-	if(sfc_index == SFC_0) {
-		ret = spi_flash_erase(sfc_index,flash0, offset, len);
-	} else if(sfc_index == SFC_1) {
-		ret = spi_flash_erase(sfc_index,flash1, offset, len);
-	}
-	printf("SF: %zu bytes @ %#x Erased: %s\n", (size_t)len, (u32)offset,
+	ret = spi_flash_erase(flash, offset, len);
+	printf("SF:    %zu bytes @ %#x Erased: %s\n", (size_t)len, (u32)offset,
 			ret ? "ERROR" : "OK");
 
 	return ret == 0 ? 0 : 1;
@@ -431,13 +391,13 @@ static int spi_flash_test(struct spi_flash *flash, uint8_t *buf, ulong len,
 	memset(&test, '\0', sizeof(test));
 	test.base_ms = get_timer(0);
 	test.bytes = len;
-	if (spi_flash_erase(sfc_index,flash, offset, len)) {
+	if (spi_flash_erase(flash, offset, len)) {
 		printf("Erase failed\n");
 		return -1;
 	}
 	spi_test_next_stage(&test);
 
-	if (spi_flash_read(sfc_index,flash, offset, len, vbuf)) {
+	if (spi_flash_read(flash, offset, len, vbuf)) {
 		printf("Check read failed\n");
 		return -1;
 	}
@@ -450,14 +410,14 @@ static int spi_flash_test(struct spi_flash *flash, uint8_t *buf, ulong len,
 	}
 	spi_test_next_stage(&test);
 
-	if (spi_flash_write(sfc_index,flash, offset, len, buf)) {
+	if (spi_flash_write(flash, offset, len, buf)) {
 		printf("Write failed\n");
 		return -1;
 	}
 	memset(vbuf, '\0', len);
 	spi_test_next_stage(&test);
 
-	if (spi_flash_read(sfc_index,flash, offset, len, vbuf)) {
+	if (spi_flash_read(flash, offset, len, vbuf)) {
 		printf("Read failed\n");
 		return -1;
 	}
@@ -479,7 +439,7 @@ static int spi_flash_test(struct spi_flash *flash, uint8_t *buf, ulong len,
 	return 0;
 }
 
-static int do_spi_flash_test(int argc, char * const argv[],unsigned char sfc_index)
+static int do_spi_flash_test(int argc, char * const argv[])
 {
 	unsigned long offset;
 	unsigned long len;
@@ -508,11 +468,7 @@ static int do_spi_flash_test(int argc, char * const argv[],unsigned char sfc_ind
 	}
 
 	memcpy(buf, (char *)CONFIG_SYS_TEXT_BASE, len);
-	if(sfc_index == SFC_0) {
-		ret = spi_flash_test(flash0, buf, len, offset, vbuf);
-	} else if(sfc_index == SFC_1) {
-		ret = spi_flash_test(flash1, buf, len, offset, vbuf);
-	}
+	ret = spi_flash_test(flash, buf, len, offset, vbuf);
 	free(vbuf);
 	free(buf);
 	if (ret) {
@@ -524,7 +480,7 @@ static int do_spi_flash_test(int argc, char * const argv[],unsigned char sfc_ind
 }
 #endif /* CONFIG_CMD_SF_TEST */
 
-static int do_spi_flash0(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+static int do_spi_flash(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	const char *cmd;
 	int ret;
@@ -543,24 +499,24 @@ static int do_spi_flash0(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv
 #endif
 
 	if (strcmp(cmd, "probe") == 0) {
-		ret = do_spi_flash_probe(argc, argv,SFC_0);
+		ret = do_spi_flash_probe(argc, argv);
 		goto done;
 	}
 
 	/* The remaining commands require a selected device */
-	if (!flash0) {
-		puts("No SPI flash selected. Please run 'sf probe' or 'sf0 probe'\n");
+	if (!flash) {
+		puts("No SPI flash selected. Please run `sf probe'\n");
 		return 1;
 	}
 
 	if (strcmp(cmd, "read") == 0 || strcmp(cmd, "write") == 0 ||
 	    strcmp(cmd, "update") == 0)
-		ret = do_spi_flash_read_write(argc, argv,SFC_0);
+		ret = do_spi_flash_read_write(argc, argv);
 	else if (strcmp(cmd, "erase") == 0)
-		ret = do_spi_flash_erase(argc, argv,SFC_0);
+		ret = do_spi_flash_erase(argc, argv);
 #ifdef CONFIG_CMD_SF_TEST
 	else if (!strcmp(cmd, "test"))
-		ret = do_spi_flash_test(argc, argv,SFC_0);
+		ret = do_spi_flash_test(argc, argv);
 #endif
 	else
 		ret = -1;
@@ -568,7 +524,7 @@ static int do_spi_flash0(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv
 done:
 #ifdef PRINT_TIME
 	end = get_timer(0);
-	printf("--->%s spend %d ms\n",cmd,end - start);
+	printf("SF:    %s command completed in %dms\n",cmd,end - start);
 #endif
 
 	if (ret != -1)
@@ -577,60 +533,6 @@ usage:
 	return CMD_RET_USAGE;
 }
 
-#ifdef CONFIG_SFC1_NOR
-static int do_spi_flash1(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
-{
-	const char *cmd;
-	int ret;
-
-	/* need at least two arguments */
-	if (argc < 2)
-		goto usage;
-
-	cmd = argv[1];
-	--argc;
-	++argv;
-
-#ifdef PRINT_TIME
-	unsigned int start, end;
-	start = get_timer(0);
-#endif
-
-	if (strcmp(cmd, "probe") == 0) {
-		ret = do_spi_flash_probe(argc, argv,SFC_1);
-		goto done;
-	}
-
-	/* The remaining commands require a selected device */
-	if (!flash1) {
-		puts("No SPI flash selected. Please run `sf1 probe'\n");
-		return 1;
-	}
-
-	if (strcmp(cmd, "read") == 0 || strcmp(cmd, "write") == 0 ||
-	    strcmp(cmd, "update") == 0)
-		ret = do_spi_flash_read_write(argc, argv,SFC_1);
-	else if (strcmp(cmd, "erase") == 0)
-		ret = do_spi_flash_erase(argc, argv,SFC_1);
-#ifdef CONFIG_CMD_SF_TEST
-	else if (!strcmp(cmd, "test"))
-		ret = do_spi_flash_test(argc, argv,SFC_1);
-#endif
-	else
-		ret = -1;
-
-done:
-#ifdef PRINT_TIME
-	end = get_timer(0);
-	printf("--->%s spend %d ms\n",cmd,end - start);
-#endif
-
-	if (ret != -1)
-		return ret;
-usage:
-	return CMD_RET_USAGE;
-}
-#endif
 #ifdef CONFIG_CMD_SF_TEST
 #define SF_TEST_HELP "\nsf test offset len		" \
 		"- run a very basic destructive test"
@@ -638,12 +540,10 @@ usage:
 #define SF_TEST_HELP
 #endif
 
-#ifdef CONFIG_SFC0_NOR
-/* Compatible with the SF command used previously, sf == sf0 */
 U_BOOT_CMD(
-	sf,	5,	1,	do_spi_flash0,
+	sf,	5,	1,	do_spi_flash,
 	"SPI flash sub-system",
-	"sf probe [[bus:]cs] [hz] [mode]	- init flash device on given SPI bus\n"
+	"probe [[bus:]cs] [hz] [mode]	- init flash device on given SPI bus\n"
 	"				  and chip select\n"
 	"sf read addr offset len 	- read `len' bytes starting at\n"
 	"				  `offset' to memory at `addr'\n"
@@ -655,37 +555,3 @@ U_BOOT_CMD(
 	"				  at `addr' to flash at `offset'"
 	SF_TEST_HELP
 );
-
-U_BOOT_CMD(
-	sf0,	5,	1,	do_spi_flash0,
-	"SPI flash sub-system",
-	"sf0 probe [[bus:]cs] [hz] [mode]	- init flash device on given SPI bus\n"
-	"				  and chip select\n"
-	"sf0 read addr offset len 	- read `len' bytes starting at\n"
-	"				  `offset' to memory at `addr'\n"
-	"sf0 write addr offset len	- write `len' bytes from memory\n"
-	"				  at `addr' to flash at `offset'\n"
-	"sf0 erase offset [+]len		- erase `len' bytes from `offset'\n"
-	"				  `+len' round up `len' to block size\n"
-	"sf0 update addr offset len	- erase and write `len' bytes from memory\n"
-	"				  at `addr' to flash at `offset'"
-	SF_TEST_HELP
-);
-#endif
-#ifdef CONFIG_SFC1_NOR
-U_BOOT_CMD(
-	sf1,	5,	1,	do_spi_flash1,
-	"SPI flash sub-system",
-	"sf1 probe [[bus:]cs] [hz] [mode]	- init flash device on given SPI bus\n"
-	"				  and chip select\n"
-	"sf1 read addr offset len 	- read `len' bytes starting at\n"
-	"				  `offset' to memory at `addr'\n"
-	"sf1 write addr offset len	- write `len' bytes from memory\n"
-	"				  at `addr' to flash at `offset'\n"
-	"sf1 erase offset [+]len		- erase `len' bytes from `offset'\n"
-	"				  `+len' round up `len' to block size\n"
-	"sf1 update addr offset len	- erase and write `len' bytes from memory\n"
-	"				  at `addr' to flash at `offset'"
-	SF_TEST_HELP
-);
-#endif
