@@ -39,13 +39,11 @@ static int spi_flash_read_write(struct spi_slave *spi,
 
 	ret = spi_xfer(spi, cmd_len * 8, cmd, NULL, flags);
 	if (ret) {
-		debug("SF: Failed to send command (%zu bytes): %d\n",
-				cmd_len, ret);
+		debug("SF:    Failed to send command (%zu bytes): %d\n", cmd_len, ret);
 	} else if (data_len != 0) {
 		ret = spi_xfer(spi, data_len * 8, data_out, data_in, SPI_XFER_END);
 		if (ret)
-			debug("SF: Failed to transfer %zu bytes of data: %d\n",
-					data_len, ret);
+			debug("SF:    Failed to transfer %zu bytes of data: %d\n", data_len, ret);
 	}
 
 	return ret;
@@ -85,7 +83,7 @@ int spi_flash_cmd_wait_ready(struct spi_flash *flash, unsigned long timeout)
 
 	ret = spi_xfer(spi, 8, &cmd, NULL, SPI_XFER_BEGIN);
 	if (ret) {
-		debug("SF: fail to read %s status register\n",
+		debug("SF:    fail to read %s status register\n",
 			cmd == CMD_READ_STATUS ? "read" : "flag");
 		return ret;
 	}
@@ -109,7 +107,7 @@ int spi_flash_cmd_wait_ready(struct spi_flash *flash, unsigned long timeout)
 		return 0;
 
 	/* Timed out */
-	debug("SF: time out!\n");
+	debug("SF:    Timed out!\n");
 	return -1;
 }
 
@@ -125,25 +123,25 @@ int spi_flash_write_common(struct spi_flash *flash, const u8 *cmd,
 
 	ret = spi_claim_bus(flash->spi);
 	if (ret) {
-		debug("SF: unable to claim SPI bus\n");
+		debug("SF:    unable to claim SPI bus\n");
 		return ret;
 	}
 
 	ret = spi_flash_cmd_write_enable(flash);
 	if (ret < 0) {
-		debug("SF: enabling write failed\n");
+		debug("SF:    enabling write failed\n");
 		return ret;
 	}
 
 	ret = spi_flash_cmd_write(spi, cmd, cmd_len, buf, buf_len);
 	if (ret < 0) {
-		debug("SF: write cmd failed\n");
+		debug("SF:    write cmd failed\n");
 		return ret;
 	}
 
 	ret = spi_flash_cmd_wait_ready(flash, timeout);
 	if (ret < 0) {
-		debug("SF: write %s timed out\n",
+		debug("SF:    write %s timed out\n",
 			timeout == SPI_FLASH_PROG_TIMEOUT ?
 			"program" : "page erase");
 		return ret;
@@ -167,7 +165,7 @@ int spi_flash_cmd_erase(struct spi_flash *flash, u32 offset, size_t len)
 #endif
 
 	if (offset % erase_size || len % erase_size) {
-		debug("SF: Erase offset/length not multiple of erase size\n");
+		debug("SF:    Erase offset/length not multiple of erase size\n");
 		return -1;
 	}
 
@@ -184,18 +182,18 @@ int spi_flash_cmd_erase(struct spi_flash *flash, u32 offset, size_t len)
 
 		ret = spi_flash_cmd_bankaddr_write(flash, bank_sel);
 		if (ret) {
-			debug("SF: fail to set bank%d\n", bank_sel);
+			debug("SF:    fail to set bank%d\n", bank_sel);
 			return ret;
 		}
 #endif
 		spi_flash_addr(offset, cmd);
 
-		debug("SF: erase %2x %2x %2x %2x (%x)\n", cmd[0], cmd[1],
+		debug("SF:    erase %2x %2x %2x %2x (%x)\n", cmd[0], cmd[1],
 		      cmd[2], cmd[3], offset);
 
 		ret = spi_flash_write_common(flash, cmd, sizeof(cmd), NULL, 0);
 		if (ret < 0) {
-			debug("SF: erase failed\n");
+			debug("SF:    erase failed\n");
 			break;
 		}
 
@@ -225,7 +223,7 @@ int spi_flash_cmd_write_multi(struct spi_flash *flash, u32 offset,
 
 		ret = spi_flash_cmd_bankaddr_write(flash, bank_sel);
 		if (ret) {
-			debug("SF: fail to set bank%d\n", bank_sel);
+			debug("SF:    fail to set bank%d\n", bank_sel);
 			return ret;
 		}
 #endif
@@ -243,7 +241,7 @@ int spi_flash_cmd_write_multi(struct spi_flash *flash, u32 offset,
 		ret = spi_flash_write_common(flash, cmd, sizeof(cmd),
 					buf + actual, chunk_len);
 		if (ret < 0) {
-			debug("SF: write failed\n");
+			debug("SF:    write failed\n");
 			break;
 		}
 
@@ -261,13 +259,13 @@ int spi_flash_read_common(struct spi_flash *flash, const u8 *cmd,
 
 	ret = spi_claim_bus(flash->spi);
 	if (ret) {
-		debug("SF: unable to claim SPI bus\n");
+		debug("SF:    unable to claim SPI bus\n");
 		return ret;
 	}
 
 	ret = spi_flash_cmd_read(spi, cmd, cmd_len, data, data_len);
 	if (ret < 0) {
-		debug("SF: read cmd failed\n");
+		debug("SF:    Read cmd failed\n");
 		return ret;
 	}
 
@@ -298,7 +296,7 @@ int spi_flash_cmd_read_fast(struct spi_flash *flash, u32 offset,
 
 		ret = spi_flash_cmd_bankaddr_write(flash, bank_sel);
 		if (ret) {
-			debug("SF: fail to set bank%d\n", bank_sel);
+			debug("SF:    fail to set bank%d\n", bank_sel);
 			return ret;
 		}
 #endif
@@ -313,7 +311,7 @@ int spi_flash_cmd_read_fast(struct spi_flash *flash, u32 offset,
 		ret = spi_flash_read_common(flash, cmd, sizeof(cmd),
 							data, read_len);
 		if (ret < 0) {
-			debug("SF: read failed\n");
+			debug("SF:    Read failed\n");
 			break;
 		}
 
@@ -333,7 +331,7 @@ int spi_flash_cmd_write_status(struct spi_flash *flash, u8 sr)
 	cmd = CMD_WRITE_STATUS;
 	ret = spi_flash_write_common(flash, &cmd, 1, &sr, 1);
 	if (ret < 0) {
-		debug("SF: fail to write status register\n");
+		debug("SF:    fail to write status register\n");
 		return ret;
 	}
 
@@ -347,14 +345,14 @@ int spi_flash_cmd_bankaddr_write(struct spi_flash *flash, u8 bank_sel)
 	int ret;
 
 	if (flash->bank_curr == bank_sel) {
-		debug("SF: not require to enable bank%d\n", bank_sel);
+		debug("SF:    not require to enable bank%d\n", bank_sel);
 		return 0;
 	}
 
 	cmd = flash->bank_write_cmd;
 	ret = spi_flash_write_common(flash, &cmd, 1, &bank_sel, 1);
 	if (ret < 0) {
-		debug("SF: fail to write bank register\n");
+		debug("SF:    fail to write bank register\n");
 		return ret;
 	}
 	flash->bank_curr = bank_sel;
@@ -369,28 +367,29 @@ int spi_flash_bank_config(struct spi_flash *flash, u8 idcode0)
 
 	/* discover bank cmds */
 	switch (idcode0) {
-	case SPI_FLASH_SPANSION_IDCODE0:
-		flash->bank_read_cmd = CMD_BANKADDR_BRRD;
-		flash->bank_write_cmd = CMD_BANKADDR_BRWR;
-		break;
-	case SPI_FLASH_STMICRO_IDCODE0:
-	case SPI_FLASH_WINBOND_IDCODE0:
-	case SPI_FLASH_GD25_IDCODE0:
-	case SPI_FLASH_MX25_IDCODE0:
-	case SPI_FLASH_EN25_IDCODE0:
-		flash->bank_read_cmd = CMD_EXTNADDR_RDEAR;
-		flash->bank_write_cmd = CMD_EXTNADDR_WREAR;
-		break;
-	default:
-		printf("SF: Unsupported bank commands %02x\n", idcode0);
-		return -1;
+		case SPI_FLASH_SPANSION_IDCODE0:
+			flash->bank_read_cmd = CMD_BANKADDR_BRRD;
+			flash->bank_write_cmd = CMD_BANKADDR_BRWR;
+			break;
+		case SPI_FLASH_STMICRO_IDCODE0:
+		case SPI_FLASH_WINBOND_IDCODE0:
+		case SPI_FLASH_GD25_IDCODE0:
+		case SPI_FLASH_MX25_IDCODE0:
+		case SPI_FLASH_EN25_IDCODE0:
+		case SPI_FLASH_XT25_IDCODE0:
+			flash->bank_read_cmd = CMD_EXTNADDR_RDEAR;
+			flash->bank_write_cmd = CMD_EXTNADDR_WREAR;
+			break;
+		default:
+			printf("SF:    Unsupported bank commands %02x\n", idcode0);
+			return -1;
 	}
 
 	/* read the bank reg - on which bank the flash is in currently */
 	cmd = flash->bank_read_cmd;
 	if (flash->size > SPI_FLASH_16MB_BOUN) {
 		if (spi_flash_read_common(flash, &cmd, 1, &curr_bank, 1)) {
-			debug("SF: fail to read bank addr register\n");
+			debug("SF:    fail to read bank addr register\n");
 			return -1;
 		}
 		flash->bank_curr = curr_bank;
@@ -449,8 +448,9 @@ int spi_flash_decode_fdt(const void *blob, struct spi_flash *flash)
  * examine when looking up part-specific identification info.
  *
  * Probe functions will be given the idcode buffer starting at their
- * manu id byte (the "idcode" in the table below).  In other words,
- * all of the continuation bytes will be skipped (the "shift" below).
+ * manufacturer id byte (the "idcode" in the table below).
+ * In other words, all of the continuation bytes will be skipped
+ * (the "shift" below).
  */
 #define IDCODE_CONT_LEN 0
 #define IDCODE_PART_LEN 3
@@ -532,13 +532,13 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 
 	spi = spi_setup_slave(bus, cs, max_hz, spi_mode);
 	if (!spi) {
-		printf("SF: Failed to set up slave\n");
+		printf("SF:    Failed to set up slave\n");
 		return NULL;
 	}
 
 	ret = spi_claim_bus(spi);
 	if (ret) {
-		debug("SF: Failed to claim SPI bus: %d\n", ret);
+		debug("SF:    Failed to claim SPI bus: %d\n", ret);
 		goto err_claim_bus;
 	}
 
@@ -553,42 +553,72 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 	cmd[0] = CMD_READ_ID;
 	cmd[1] = 0;
 	ret = spi_flash_cmd_read(spi, &cmd, 2, idcode, sizeof(idcode));
+#else
+    /* Perform multiple readings to get two consecuitive matches. */
+    u8 previd;
+    int limit = 10;
+
+	spi_flash_cmd(spi, CMD_READ_ID, idcode, sizeof(idcode));
+    debug("SF:    Manufacturer id: 0x%02X\n", idcode[0]);
+    previd = idcode[0];
+
+	while (1) {
+		ret = spi_flash_cmd(spi, CMD_READ_ID, idcode, sizeof(idcode));
+		debug("SF:    Manufacturer id: 0x%02X\n", idcode[0]);
+
+		if (idcode[0] == 0) {
+            debug("SF:    Bogus reading.\n");
+        } else if (idcode[0] != previd) {
+            debug("SF:    Reading do not match! 0x%02X 0x%02X\n", previd, idcode[0]);
+	        previd = idcode[0];
+        } else {
+            debug("SF:    We have a match! 0x%02X 0x%02X\n", previd, idcode[0]);
+            break;
+        }
+
+        if (--limit > 0) {
+			debug("SF:    Retrying. %d attempts left.\n", limit);
+        } else {
+			printf("SF:    All attempts failed to read flash chip ID!\n");
+			goto err_read_id;
+        }
+	}
+#endif
 	if (ret)
 		goto err_read_id;
-#endif
+
 #ifdef DEBUG
-	printf("SF: Got idcodes\n");
+	printf("SF:    Got idcodes\n");
 	print_buffer(0, idcode, 1, sizeof(idcode), 0);
 #endif
 
 	/* count the number of continuation bytes */
 	for (shift = 0, idp = idcode;
-	     shift < IDCODE_CONT_LEN && *idp == 0x7f;
-	     ++shift, ++idp)
+         shift < IDCODE_CONT_LEN && *idp == 0x7f;
+         ++shift, ++idp)
 		continue;
 
 #ifdef CONFIG_BURNER
 	flash = flashes[0].probe(spi, idp);
-	if (!flash){
-		printf("the flash malloc error\n");
+	if (!flash) {
+		printf("SF:    The flash malloc error\n");
 	}
-
 #else
 	/* search the table for matches in shift and id */
-	for (i = 0; i < ARRAY_SIZE(flashes); ++i)
+	for (i = 0; i < ARRAY_SIZE(flashes); ++i) {
 		if (flashes[i].shift == shift && flashes[i].idcode == *idp) {
-			/* we have a match, call probe */
+			debug("SF:    We have a match (0x%02X 0x%02X), call probe.\n", spi, idp);
 			flash = flashes[i].probe(spi, idp);
 			if (flash)
 				break;
 		}
+	}
 #endif
-
-	if (!flash) {
-		printf("SF: Unsupported manufacturer %02x\n", *idp);
+	if (flash) {
+        debug("SF:    The chip is supported!\n");
+    } else {
+		printf("SF:    Vendor unsupported: 0x%02X\n", *idp);
 		goto err_manufacturer_probe;
-	}else{
-		//printf("the manufacturer %02x\n", *idp);
 	}
 
 #ifdef CONFIG_SPI_FLASH_BAR
@@ -600,20 +630,18 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 
 #ifdef CONFIG_OF_CONTROL
 	if (spi_flash_decode_fdt(gd->fdt_blob, flash)) {
-		debug("SF: FDT decode error\n");
+		debug("SF:    FDT decode error\n");
 		goto err_manufacturer_probe;
 	}
 #endif
 
-
 #ifndef CONFIG_BURNER
-#ifndef CONFIG_FAST_BOOT
-    printf("SF: Detected %s, manufacturer id: %02x\n", flash->name, *idp);
-#endif
+	printf("SF:    Detected %s (%02x %02x %02x %02x %02x)",
+           flash->name, idcode[0], idcode[1], idcode[2], idcode[3], idcode[4]);
 #endif
 
 #ifdef DEBUG
-	printf("SF: Detected %s with page size ", flash->name);
+	printf("SF:    Detected %s with page size ", flash->name);
 	print_size(flash->sector_size, ", total ");
 	print_size(flash->size, "");
 #endif
@@ -622,8 +650,8 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 	puts("\n");
 #ifndef CONFIG_SPI_FLASH_BAR
 	if (flash->size > SPI_FLASH_16MB_BOUN) {
-		puts("SF: Warning - Only lower 16MiB accessible,");
-		puts(" Full access #define CONFIG_SPI_FLASH_BAR\n");
+		puts("SF:    Warning! Only lower 16MiB are accessible.");
+		puts(" Add #define CONFIG_SPI_FLASH_BAR for full access.\n");
 	}
 #endif
 
@@ -647,7 +675,7 @@ void *spi_flash_do_alloc(int offset, int size, struct spi_slave *spi,
 
 	ptr = malloc(size);
 	if (!ptr) {
-		debug("SF: Failed to allocate memory\n");
+		debug("SF:    Failed to allocate memory\n");
 		return NULL;
 	}
 	memset(ptr, '\0', size);
