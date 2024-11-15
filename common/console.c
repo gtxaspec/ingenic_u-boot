@@ -659,14 +659,13 @@ int console_init_f(void)
 void stdio_print_current_devices(void)
 {
 	/* Print information */
-	puts("Data transfer:    ");
+	puts("In:    ");
 	if (stdio_devices[stdin] == NULL) {
 		puts("No input devices available!\n");
 	} else {
 		printf ("%s\n", stdio_devices[stdin]->name);
 	}
 
-#if 0
 	puts("Out:   ");
 	if (stdio_devices[stdout] == NULL) {
 		puts("No output devices available!\n");
@@ -680,7 +679,6 @@ void stdio_print_current_devices(void)
 	} else {
 		printf ("%s\n", stdio_devices[stderr]->name);
 	}
-#endif
 }
 
 #ifdef CONFIG_SYS_CONSOLE_IS_IN_ENV
