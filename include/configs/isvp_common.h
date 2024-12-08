@@ -821,7 +821,10 @@
  */
 #define CONFIG_SPL_FRAMEWORK
 
-/*#define CONFIG_SPL_LZOP*/
+/* doesn't work in MMC yet? test again */
+#ifndef CONFIG_ENV_IS_IN_MMC
+#define CONFIG_SPL_LZOP
+#endif
 
 #if defined(CONFIG_SPL_LZOP)
 #define CONFIG_DECMP_BUFFER_ADRS	0x80200000
@@ -973,6 +976,6 @@ CONFIG_GPIO_IRCUT_SETTINGS
 /* IRCUT Default GPIOs */
 
 #define CONFIG_GPIO_IRCUT_SETTINGS \
-"gpio_ircut=52I 53I 49I 50I 57I 58I\0"
+"gpio_ircut=\0"
 
 #endif /*__CONFIG_ISVP_COMMON__*/
