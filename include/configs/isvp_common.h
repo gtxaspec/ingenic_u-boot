@@ -43,7 +43,7 @@
 #define T40A "T40A"
 #define T40N "T40N"
 #define T40NN "T40NN"
-#define T40NXP "T40XP"
+#define T40XP "T40XP"
 
 #if defined(CONFIG_T40A)
 #define SOC_VAR T40A
