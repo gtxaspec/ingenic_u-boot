@@ -103,7 +103,7 @@ int esmt_midc8_nand_init(void) {
 		return -ENOMEM;
 	}
 
-	esmt_midc8_nand->id_manufactory = 0xC8;
+	esmt_midc8_nand->id_manufactory = 0xC1;
 	esmt_midc8_nand->id_device_list = device_id;
 	esmt_midc8_nand->id_device_count = ESMT_MIDC8_DEVICES_NUM;
 
